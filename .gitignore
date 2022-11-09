@@ -1,0 +1,6 @@
+*.pem
+.terraform
+resources.txt
+images/*
+!images/.gitkeep
+test
