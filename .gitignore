@@ -4,3 +4,4 @@ resources.txt
 images/*
 !images/.gitkeep
 test
+.terraform.lock.hcl

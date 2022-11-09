@@ -1,0 +1,57 @@
+name: Deploy to EC2
+on:
+  push:
+    branches:
+      - master
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout the files
+      uses: actions/checkout@v3
+
+    - name: Build the image
+      run:  sudo docker build . -t 123
+
+    - name: Get image as file
+      run: sudo docker save 123 -o images/a.tar; sudo chmod 777 images/a.tar
+
+    - name: Copy image with SSH
+      uses: easingthemes/ssh-deploy@main
+      env:
+        SSH_PRIVATE_KEY: ${{secrets.EC2_SSH_KEY}}
+        ARGS: "-rltgoDzvO --delete" # overwrite modified files
+        SOURCE: "./images" # folder
+        REMOTE_HOST: ${{secrets.REMOTE_HOST}}
+        REMOTE_USER: ${{secrets.REMOTE_USER}}
+        TARGET: ${{secrets.TARGET_DIR}}
+        EXCLUDE: "" # paths to exclude, separated by comma
+
+    - name: Configure SSH
+      run: |
+        mkdir -p ~/.ssh/
+        echo "$SSH_KEY" > ~/.ssh/staging.key
+        chmod 600 ~/.ssh/staging.key
+        cat >>~/.ssh/config <<END
+        Host staging
+          HostName $SSH_HOST
+          User $SSH_USER
+          IdentityFile ~/.ssh/staging.key
+          StrictHostKeyChecking no
+        END
+      env:
+        SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        SSH_USER: ${{ secrets.REMOTE_USER }}
+        SSH_HOST: ${{ secrets.REMOTE_HOST }}
+
+    - name: Kill all containers
+      run: ssh staging 'sudo docker rm $(sudo docker ps -aq) -f || true'
+
+    - name: Load image
+      run: ssh staging 'sudo docker load -i /home/ubuntu/images/a.tar'
+      env: 
+        REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+
+    - name: Run new image
+      run: ssh staging 'sudo docker run -p 80:8080 -d -t 123'
